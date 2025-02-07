@@ -1,0 +1,63 @@
+#Colin Radley's Scripts
+
+#!/usr/bin/bash
+
+#The purpose of this program is to make messages when a new IP address has failed to login.
+#You will be able to ban an ip address when someone fails to login
+
+#This makes sure that the program dose not sent a message on startup
+latest_date="$(tail -n 1 failedLogins.txt | cut -d ' ' -f 1-3)"
+input=0
+IP_address=""
+
+echo "Watching logs..."
+
+#checks if the file exist
+if [ ! -e "failedLogins.txt" ];
+then
+        echo "New txtfile" > "failedLogins.txt"
+fi
+
+
+while true
+do
+        #when someone fails to ssh this statement is true
+        if [ "$latest_date" != "$(journalctl -u ssh | grep failure | tail -n 1 | cut -d ' ' -f 1-3)" ];
+        then
+                #Gets the ip address
+                IP_address="$(tail -n 1 failedLogins.txt | cut -d ' ' -f 14 | cut -c 7-)"
+
+                #print some info about failed login
+                echo "Someone has failed to login $(tail -n 1 failedLogins.txt)"
+
+                #get user input
+                read -p "Enter to skip message or <1: view logs> <2: ban IP address>" input
+
+                case "$input" in
+                  1)
+                        less failedLogins.txt
+                        ;;
+                  2)
+                        # -A INPUT: Appends a rule to the INPUT chain which handles incoming traffic
+                        # -s ip_address: Specifices the source IP address
+                        # -p tcp : Specifies the rules applies to TCP traffic
+                        # --dport 22: Specifies desination port (22 for SSH)
+                        # -j REJECT: tells iptables to reject packets from the given IP address
+                        sudo iptables -A INPUT -s "$IP_address" -p tcp --dport  -j REJECT
+                        ;;
+                  *)
+                        echo "okay"
+                        ;;
+                esac
+                clear
+                echo "Watching logs..."
+        fi
+
+        #puts logs into text file
+        journalctl -u ssh | grep failure | tail > failedLogins.txt
+
+        #set the variable latest_date
+        latest_date=$(journalctl -u ssh | grep failure | tail -n 1 | cut -d ' ' -f 1-3)
+
+        sleep 5
+done
